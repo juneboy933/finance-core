@@ -57,3 +57,12 @@ that keeps payment systems trustworthy at scale.
 - Adapted to Prisma 7's split configuration model (schema.prisma for the
   runtime client, prisma.config.ts for CLI-time connection info)
 - Verified end-to-end connectivity from Prisma CLI to the containerized database
+
+### Day 1 - idempotency Reasoning
+
+- Atomic: It checks which request arrived first, if it's a new request then yes it's the first request but if it already exists then no, it's not the first request in our cache.
+- 30 second timer on the redis set method, claim() service: This checks if the request is within the the 30 second period. If it's past that then something went wrong, try again later.
+- 24 hour timer on the redis set method, complete() service: This is all about Safaricom callback or any other callback sending request to our callback route. If the said callback gets the same key, then don't accept it again.
+- Server crashing mid-session: If it happens then the request is gone and you get to process it again. Though if the server resumes processing within the 30 second period, a retry get rejected. But, if its past 30 second period, then the request get treated as a brand new request.
+- Two separate redis boxes: This means, two processes and two sessions for one payment request by two redis servers. The danger from this is that the two redis servers process the same payment request as the first one in each redis server cache and without checking from each other, it results to double credit or debit to customer
+- Duplicate processing: This means double entry and it results to the customer being debited or credited twice for one real payment request.
