@@ -66,3 +66,24 @@ that keeps payment systems trustworthy at scale.
 - Server crashing mid-session: If it happens then the request is gone and nothing resumes it automatically. Though if the server resumes processing within the 30 second period, a retry get rejected. But, if its past 30 second period, then the request get treated as a brand new request.
 - Two separate redis boxes: This means, two processes and two sessions for one payment request by two redis servers. The danger from this is that the two redis servers process the same payment request as the first one in each redis server cache and without checking from each other, it results to double credit or debit to customer
 - Duplicate processing: This means double entry and it results to the customer being debited or credited twice for one real payment request.
+
+### Day 2 — Double-Entry Ledger Schema
+
+- Modeled Account, Transaction, and LedgerEntry using double-entry accounting
+  principles instead of a naive mutable `balance` column
+- Account represents identity only (a wallet, platform fee account, or M-Pesa
+  settlement account) — it stores no balance
+- Transaction is a pure grouping container — it has no amount and touches no
+  single account directly, since a real transaction (e.g. a payment with a
+  platform fee) can touch multiple accounts with different amounts each
+- LedgerEntry is the single source of truth: one row per account touched,
+  recording the amount and direction (DEBIT/CREDIT) for that specific movement
+- A balance is never stored — it's always derived by summing an account's
+  ledger entries. This makes the books self-auditing: there's only ever one
+  source of truth, so balance and history can never silently disagree
+- Reasoned through why per-entry balance snapshots (if added later, for read
+  performance) are a different risk than a mutable Account.balance field —
+  a snapshot is written once and never touched again, so it can't drift from
+  the ledger the way an independently-updatable field can
+- Next: LedgerService.recordTransaction() — enforcing that debits and credits
+  always sum to zero before anything is persisted, atomically
