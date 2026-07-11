@@ -11,3 +11,74 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum AccountType {
+  WALLET
+  PLATFORM_FEE
+  MPESA_SETTLEMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum EntryType {
+  CREDIT
+  DEBIT
+}
+
+model User {
+  id String @id @default(uuid())
+
+  phone_number String @unique
+  email String @unique
+  password String
+
+  account Account[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt()
+}
+
+model Account {
+  id String @id @default(uuid())
+
+  userId String?
+  user User? @relation(fields: [userId], references: [id])
+
+  accountType AccountType
+
+  ledgerEntries LedgerEntry[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt()
+}
+
+model Transaction {
+  id String @id @default(uuid())
+
+  status TransactionStatus @default(PENDING)
+
+  // Mpesa details
+
+  ledgerEntries LedgerEntry[]
+  created_at DateTime @default(now())
+}
+
+model LedgerEntry {
+  id String @id @default(uuid())
+
+  accountId String
+  account Account @relation(fields: [accountId], references: [id])
+
+  transactionId String
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  amount Decimal @db.Decimal(12,2)
+
+  entryType EntryType
+
+  created_at DateTime @default(now())
+}
