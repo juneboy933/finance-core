@@ -67,7 +67,7 @@ that keeps payment systems trustworthy at scale.
 - Two separate redis boxes: This means, two processes and two sessions for one payment request by two redis servers. The danger from this is that the two redis servers process the same payment request as the first one in each redis server cache and without checking from each other, it results to double credit or debit to customer
 - Duplicate processing: This means double entry and it results to the customer being debited or credited twice for one real payment request.
 
-### Day 2 — Double-Entry Ledger Schema
+### Day 2 — Double-Entry Ledger Schema & LedgerService
 
 - Modeled Account, Transaction, and LedgerEntry using double-entry accounting
   principles instead of a naive mutable `balance` column
@@ -85,5 +85,30 @@ that keeps payment systems trustworthy at scale.
   performance) are a different risk than a mutable Account.balance field —
   a snapshot is written once and never touched again, so it can't drift from
   the ledger the way an independently-updatable field can
-- Next: LedgerService.recordTransaction() — enforcing that debits and credits
-  always sum to zero before anything is persisted, atomically
+
+**Built `LedgerService.recordTransaction()`:**
+
+- Accepts a full set of proposed ledger entries up front (account, amount,
+  direction) rather than exposing separate credit/debit methods — this makes
+  it structurally impossible for a caller to write an unbalanced transaction,
+  since there's only one door in and it enforces the check itself
+- Validates `sum(DEBIT) === sum(CREDIT)` using Prisma.Decimal arithmetic
+  (never native JS numbers, to avoid floating-point precision issues with
+  money) before writing anything
+- Wraps the Transaction and all LedgerEntry creation in a single
+  `prisma.$transaction()` — if any write fails, everything rolls back,
+  guaranteeing no partial/orphaned data ever persists
+- Tested both paths: a balanced 3-entry transaction (M-Pesa settlement debit,
+  wallet credit, platform fee credit) committed successfully with all entries
+  correctly linked; a deliberately unbalanced transaction was rejected with a
+  400 before touching the database, verified via Prisma Studio that zero rows
+  were written on failure
+
+**Debugging notes (Prisma 7 specific):**
+
+- The same generator no longer implicitly reads DATABASE_URL from the
+  schema's datasource block at runtime — PrismaService now explicitly
+  constructs a PrismaPg driver adapter (@prisma/adapter-pg) with the
+  connection string, and passes that adapter into the PrismaClient
+  constructor, rather than relying on Prisma's built-in query engine to
+  manage the connection itself

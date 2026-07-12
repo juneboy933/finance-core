@@ -4,6 +4,9 @@ import { AppService } from './app.service';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { IdempotencyTestModule } from './idempotency-test/idempotency-test.module';
 import { ConfigModule } from '@nestjs/config';
+import { LedgerModule } from './ledger/ledger.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { LedgerTestModule } from './ledger-test/ledger-test.module';
 
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { ConfigModule } from '@nestjs/config';
     }),
     IdempotencyModule,
     IdempotencyTestModule,
+    LedgerModule,
+    PrismaModule,
+    LedgerTestModule,
   ],
   controllers: [AppController],
   providers: [AppService],
