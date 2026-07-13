@@ -7,6 +7,8 @@ import { ConfigModule } from '@nestjs/config';
 import { LedgerModule } from './ledger/ledger.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { LedgerTestModule } from './ledger-test/ledger-test.module';
+import { MpesaModule } from './mpesa/mpesa.module';
+import { MpesaTestModule } from './mpesa-test/mpesa-test.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { LedgerTestModule } from './ledger-test/ledger-test.module';
     LedgerModule,
     PrismaModule,
     LedgerTestModule,
+    MpesaModule,
+    MpesaTestModule,
   ],
   controllers: [AppController],
   providers: [AppService],
