@@ -112,3 +112,33 @@ that keeps payment systems trustworthy at scale.
   connection string, and passes that adapter into the PrismaClient
   constructor, rather than relying on Prisma's built-in query engine to
   manage the connection itself
+
+### Day 3 — M-Pesa STK Push Integration
+
+- Built MpesaService: OAuth token retrieval, STK Push initiation, all
+  tested against Safaricom's real sandbox (not mocked)
+- Cached access tokens in Redis using a fixed key, checking cache before
+  ever calling Daraja — avoids unnecessary network calls and respects
+  Safaricom's rate limits on token generation
+- Used a safety-margin TTL (3300s) instead of Daraja's full 3600s token
+  life, to avoid a token expiring mid-flight between cache read and
+  Safaricom's request processing
+- Implemented Daraja's exact Password field requirement: base64 of
+  shortcode + passkey + timestamp, concatenated with no separators —
+  a strict format that silently fails if built incorrectly
+- Learned generateTimestamp() needs getMonth() + 1 (0-indexed months)
+  and getDate() (not getDay(), which returns weekday) — both zero-padded
+  to match Daraja's required YYYYMMDDHHmmss shape exactly
+- Designed normalizePhoneNumber() to defensively accept common Kenyan
+  phone formats (0712..., +254712..., spaced/dashed) and convert to
+  Daraja's strict 2547XXXXXXXX requirement, rather than pushing that
+  responsibility onto every caller — DTO validates basic shape only,
+  service owns the actual business format rule
+- Verified end-to-end: successful STK Push against sandbox test number,
+  confirmed normalization works for both 0-prefixed and 254-prefixed
+  input, confirmed invalid input is rejected with a clean 400 before
+  ever reaching Daraja
+- Next: the STK Push callback — parsing Safaricom's async payment
+  result, applying the Day 1 idempotency guard (keyed on
+  CheckoutRequestID from the callback body, not a header), and calling
+  LedgerService.recordTransaction() to record the real payment
