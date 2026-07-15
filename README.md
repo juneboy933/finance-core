@@ -142,3 +142,24 @@ that keeps payment systems trustworthy at scale.
   result, applying the Day 1 idempotency guard (keyed on
   CheckoutRequestID from the callback body, not a header), and calling
   LedgerService.recordTransaction() to record the real payment
+
+### Day 4 — M-Pesa Callback: Idempotency + Ledger Integration (in progress)
+
+- Adapted the Day 1 idempotency pattern for webhook-style callbacks that
+  carry no header, extracting CheckoutRequestID from the nested Daraja
+  callback body instead
+- Resolved phone number -> wallet Account via the User relation, with an
+  important fix: querying Prisma with `userId: user?.id` where user could
+  be null resolves to `undefined`, which Prisma treats as "no filter" —
+  silently returning an unrelated account instead of throwing. Fixed by
+  checking user existence explicitly before any account lookup
+- Extended Transaction with M-Pesa reference fields (unique constraints
+  as a DB-level backstop under the Redis idempotency guard)
+- Verified live against Safaricom's sandbox: real STK Push, real ngrok-
+  delivered callback, correct handling of a failed/timed-out payment
+  (zero ledger writes, as designed)
+- Open for next session: confirm a genuine successful payment writes a
+  correctly balanced Transaction + 2 LedgerEntry rows; run the duplicate-
+  callback test to prove the idempotency guarantee on the real M-Pesa
+  flow; resolve an intermittent 404/201 alternation on the callback
+  route (suspected stale process on port 3000)

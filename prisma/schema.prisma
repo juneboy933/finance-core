@@ -63,6 +63,9 @@ model Transaction {
   status TransactionStatus @default(PENDING)
 
   // Mpesa details
+  checkoutRequestId  String? @unique
+  mpesaReceiptNumber String? @unique
+  phoneNumber        String?
 
   ledgerEntries LedgerEntry[]
   created_at DateTime @default(now())

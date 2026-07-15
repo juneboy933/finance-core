@@ -13,6 +13,11 @@ export class LedgerService {
       amount: string;
       entryType: EntryType;
     }[],
+    metadata?: {
+      checkoutRequestId?: string;
+      mpesaReceiptNumber?: string;
+      phoneNumber?: string;
+    },
   ) {
     // Validate at least 2 entries
     if (entries.length < 2)
@@ -46,7 +51,12 @@ export class LedgerService {
     // Create the transaction and record all the ledger entrie in one prisma $transaction
     const result = await this.prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.create({
-        data: { status: TransactionStatus.COMPLETED },
+        data: {
+          status: TransactionStatus.COMPLETED,
+          checkoutRequestId: metadata?.checkoutRequestId,
+          mpesaReceiptNumber: metadata?.mpesaReceiptNumber,
+          phoneNumber: metadata?.phoneNumber,
+        },
       });
 
       const ledgerEntries = await Promise.all(
