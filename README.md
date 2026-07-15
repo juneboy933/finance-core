@@ -163,3 +163,23 @@ that keeps payment systems trustworthy at scale.
   callback test to prove the idempotency guarantee on the real M-Pesa
   flow; resolve an intermittent 404/201 alternation on the callback
   route (suspected stale process on port 3000)
+
+  **Verified end-to-end against Safaricom's live sandbox:**
+
+- A real STK Push from a real phone triggered a real callback, delivered
+  through ngrok, correctly parsed, resolved to the paying user's wallet,
+  and recorded as a balanced Transaction (2 LedgerEntry rows) with
+  Safaricom's MpesaReceiptNumber preserved
+- Resent the identical real callback payload a second time — confirmed
+  via Prisma Studio that exactly 1 Transaction and 2 LedgerEntry rows
+  exist, proving the idempotency guard holds on a genuine duplicate,
+  not just a synthetic test
+- Root-caused an earlier alternating 404/201 pattern: STK Push requests
+  capture CallBackURL at initiation time, so requests made before a
+  mid-session .env fix delivered their callbacks to a stale path later
+  — not a routing bug, an artifact of iterating on config live
+- Known gap (deliberately deferred to Day 7): a successful M-Pesa
+  payment for an unregistered phone number currently returns a 404,
+  which would cause Safaricom to retry indefinitely for money that
+  already moved into the settlement account with no ledger attribution
+  — this exact scenario is what reconciliation is designed to catch
