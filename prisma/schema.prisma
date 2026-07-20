@@ -68,6 +68,8 @@ model Transaction {
   phoneNumber        String?
 
   ledgerEntries LedgerEntry[]
+  deadLetters DeadLetter[]
+
   created_at DateTime @default(now())
 }
 
@@ -84,5 +86,23 @@ model LedgerEntry {
 
   entryType EntryType
 
+  created_at DateTime @default(now())
+}
+
+enum DeadLetterStatus {
+  UNRESOLVED
+  RESOLVED
+}
+
+model DeadLetter {
+  id String @id @default(uuid())
+
+  transactionId String?
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  data Json?
+  operationType String?
+  status DeadLetterStatus @default(UNRESOLVED)
+  reason String
   created_at DateTime @default(now())
 }
