@@ -183,3 +183,42 @@ that keeps payment systems trustworthy at scale.
   which would cause Safaricom to retry indefinitely for money that
   already moved into the settlement account with no ledger attribution
   — this exact scenario is what reconciliation is designed to catch
+
+### Day 5 — BullMQ Retries, Exponential Backoff, and Dead-Letter Capture
+
+**Problem:** the STK Push initiation call to Daraja was synchronous and inline
+— a transient timeout, 500, or dropped connection meant the request simply
+failed, with no automatic retry and no visibility if it failed permanently.
+
+**Built:**
+
+- `MpesaStkPushQueueService` — a producer that enqueues STK Push requests
+  onto a BullMQ queue instead of calling Daraja inline
+- `MpesaStkPushProcessor` — a `WorkerHost` that pulls jobs off the queue and
+  calls the existing `MpesaService.initiateSTKPush()`, unchanged — all retry
+  logic is handled by BullMQ, not hand-written
+- `DeadLetter` Prisma model — captures jobs that exhaust all retry attempts,
+  since BullMQ has no built-in dead-letter queue primitive; this is the
+  documented community pattern (listen on the worker's `failed` event, check
+  `attemptsMade` against the configured max, write a record only once
+  genuinely exhausted)
+
+**Key design decisions, reasoned through:**
+
+- **2 attempts, 1s exponential backoff** — deliberately short. STK Push
+  initiation is synchronous and user-facing: a real customer is watching a
+  loading state, waiting for the PIN prompt to appear. Long backoff (e.g. 5s
+  base, 3 attempts = ~35s worst case) optimizes for giving a struggling API
+  time to recover, but does nothing for Safaricom's actual recovery time and
+  only makes the customer wait longer before either succeeding or seeing a
+  clear failure. Short backoff suits a brief, one-off network blip; a
+  background job with no one watching (e.g. reconciliation, Day 7) would
+  warrant the opposite — longer, more patient backoff.
+- **`DeadLetter.transactionId` is optional** — an STK Push initiation that
+  never gets past the first request has no `Transaction` row yet (that's
+  only created later, from a successful callback via `recordTransaction()`).
+  A dead letter from initiation failure legitimately has nothing to link to;
+  forcing a required relation here would make the exact failure case this
+  table exists for impossible to record correctly.
+- **Module boundaries redrawn to avoid a circular dependency** — the queue
+  module needed `MpesaService` (for the
