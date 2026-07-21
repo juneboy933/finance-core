@@ -220,5 +220,3 @@ failed, with no automatic retry and no visibility if it failed permanently.
   A dead letter from initiation failure legitimately has nothing to link to;
   forcing a required relation here would make the exact failure case this
   table exists for impossible to record correctly.
-- **Module boundaries redrawn to avoid a circular dependency** — the queue
-  module needed `MpesaService` (for the
