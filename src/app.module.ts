@@ -12,6 +12,8 @@ import { MpesaTestModule } from './mpesa-test/mpesa-test.module';
 import { BullModule } from '@nestjs/bullmq';
 import { MpesaStkPushQueueModule } from './queue/mpesa-stk-push/mpesa-stk-push.module';
 import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
       },
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
     IdempotencyModule,
     IdempotencyTestModule,
     LedgerModule,
@@ -48,6 +51,7 @@ import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
     MpesaTestModule,
     MpesaStkPushQueueModule,
     RateLimiterModule,
+    ReconciliationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

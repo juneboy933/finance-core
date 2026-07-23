@@ -106,3 +106,24 @@ model DeadLetter {
   reason String
   created_at DateTime @default(now())
 }
+
+enum ReconciliationStatus {
+  MATCHED
+  AMOUNT_MISMATCH
+  MISSING_IN_LEDGER
+  MISSING_IN_STATEMENT
+}
+
+model ReconciliationRecord {
+  id String @id @default(uuid())
+
+  mpesaReceiptNumber String
+  status ReconciliationStatus
+
+  ledgerAmount    Decimal? @db.Decimal(12, 2)
+  statementAmount Decimal? @db.Decimal(12, 2)
+
+  resolved Boolean @default(false)
+
+  created_at DateTime @default(now())
+}
