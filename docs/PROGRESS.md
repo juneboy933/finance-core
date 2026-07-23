@@ -424,3 +424,41 @@ failed, with no automatic retry and no visibility if it failed permanently.
   A dead letter from initiation failure legitimately has nothing to link to;
   forcing a required relation here would make the exact failure case this
   table exists for impossible to record correctly.
+
+### Day 7 — Reconciliation Engine
+
+**Problem:** every prevention mechanism built so far (idempotency, atomic
+ledger writes, retries, rate limiting) can still miss something -- a
+server crash at the wrong instant, a payment succeeding on Safaricom's
+side with nothing recorded locally (the exact gap found live on Day 4).
+Reconciliation is the safety net that detects, after the fact, what
+prevention didn't catch.
+
+**Built:** ReconciliationService comparing the ledger against a mock
+M-Pesa statement across four states -- MATCHED, AMOUNT_MISMATCH,
+MISSING_IN_LEDGER, MISSING_IN_STATEMENT -- using a two-pass design,
+since a single direction of comparison can only ever discover
+discrepancies in that one direction.
+
+**Key design decisions:**
+
+- Normalized all amounts to `Prisma.Decimal` before comparing with
+  `.equals()`, never `===` -- avoids false mismatches purely from
+  formatting differences between a database Decimal and a raw
+  statement value
+- Selected the ledger's CREDIT entry specifically (not array position)
+  to represent "the amount that reached the customer" -- robust once
+  fee entries exist
+- Persisted findings without a unique constraint on receipt number --
+  each scheduled run is its own historical record, not an overwritten
+  latest state, which matters for a genuine audit trail
+- Scheduled hourly via `@nestjs/schedule`, with loud logging on any
+  non-MATCHED result so issues surface in real-time logs, not only
+  via a later database query
+
+**Verified against real data:** ran against actual Transaction/
+LedgerEntry rows plus a deliberately crafted mock statement (one real
+match, one deliberately wrong amount, one fabricated missing receipt,
+two real transactions absent from the statement) -- all four states
+correctly identified in one run, confirmed both via API response and
+directly in Prisma Studio's ReconciliationRecord table.
