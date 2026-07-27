@@ -462,3 +462,43 @@ match, one deliberately wrong amount, one fabricated missing receipt,
 two real transactions absent from the statement) -- all four states
 correctly identified in one run, confirmed both via API response and
 directly in Prisma Studio's ReconciliationRecord table.
+
+### Day 8 — Full Application Dockerization
+
+**Problem:** only Postgres and Redis were containerized; the NestJS app
+itself still ran directly on the host machine, meaning anyone cloning
+the repo needed a matching local Node install rather than a single
+reproducible `docker compose up`.
+
+**Built:** a multi-stage Dockerfile separating build-time concerns from
+runtime concerns -- a `builder` stage with full dependencies, the
+TypeScript compiler, and Prisma generation; a `runner` stage that starts
+fresh and only receives the compiled `dist/` output and generated Prisma
+client, installing production-only dependencies via `npm ci --omit=dev`.
+
+**Key design decisions:**
+
+- Ordered Dockerfile layers so `package.json`/`package-lock.json` are
+  copied and installed _before_ the rest of the source code -- Docker's
+  build cache is invalidated by whatever changes; putting rarely-changing
+  dependency files first means routine code edits don't force a full
+  `npm install` on every rebuild
+- Used `depends_on` with `condition: service_healthy`, tied to the
+  existing Postgres/Redis healthchecks from Day 0, rather than plain
+  `depends_on` (which only waits for a container to _start_, not to be
+  _ready_) -- the app container now never starts before its dependencies
+  can genuinely accept connections
+- Split environment configuration into `.env` (local development,
+  `localhost` hostnames) and `.env.docker` (containerized app, using
+  Docker Compose's automatic per-service DNS -- `postgres`, `redis` --
+  since `localhost` means something different from inside a container
+  on the same network as its dependencies)
+
+**Verified end-to-end:** a full `docker compose up --build` correctly
+built the multi-stage image, started Postgres and Redis, waited for both
+to report healthy before starting the app, and every module/route loaded
+identically to local development. Confirmed real functional correctness
+(not just a successful build) by calling the live M-Pesa sandbox from
+inside the running container and receiving a genuine Daraja OAuth token
+-- proving both internal (Postgres/Redis) and external (internet)
+networking work correctly from within Docker.
