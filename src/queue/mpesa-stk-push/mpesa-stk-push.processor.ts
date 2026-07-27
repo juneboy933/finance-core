@@ -1,9 +1,9 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { MpesaService } from 'src/mpesa/mpesa.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { StkPushJobData } from './dto/mpesa-stk-push.dto';
+import { MpesaService } from 'mpesa/mpesa.service';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Processor('mpesa-stk-push')
 export class MpesaStkPushProcessor extends WorkerHost {

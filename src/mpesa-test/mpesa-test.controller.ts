@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
-import { InitiateSTKDto } from 'src/mpesa/dto/initiateSTK.dto';
-import { MpesaService } from 'src/mpesa/mpesa.service';
+import { InitiateSTKDto } from 'mpesa/dto/initiateSTK.dto';
+import { MpesaService } from 'mpesa/mpesa.service';
 
 @Controller('mpesa-test')
 export class MpesaTestController {

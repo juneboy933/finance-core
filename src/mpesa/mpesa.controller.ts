@@ -1,7 +1,7 @@
 import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
 import { MpesaService } from './mpesa.service';
 import type { StkCallbackBody } from './mpesa.service';
-import { MpesaCallbackIdempotencyInterceptor } from 'src/idempotency/interceptor/mpesaCallback.idempotency.interceptor';
+import { MpesaCallbackIdempotencyInterceptor } from 'idempotency/interceptor/mpesaCallback.idempotency.interceptor';
 
 @Controller('mpesa')
 export class MpesaController {

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { LedgerTestController } from './ledger-test.controller';
-import { LedgerModule } from 'src/ledger/ledger.module';
+import { LedgerModule } from 'ledger/ledger.module';
 
 @Module({
   imports: [LedgerModule],
