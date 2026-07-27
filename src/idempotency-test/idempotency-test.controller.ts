@@ -5,7 +5,7 @@ import {
   Post,
   UseInterceptors,
 } from '@nestjs/common';
-import { IdempotencyInterceptor } from 'src/idempotency/interceptor/idempotency.interceptor';
+import { IdempotencyInterceptor } from 'idempotency/interceptor/idempotency.interceptor';
 
 @Controller('idempotency-test')
 export class IdempotencyTestController {

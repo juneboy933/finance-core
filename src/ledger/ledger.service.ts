@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from 'generated/prisma/client';
 import { EntryType, TransactionStatus } from 'generated/prisma/enums';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class LedgerService {

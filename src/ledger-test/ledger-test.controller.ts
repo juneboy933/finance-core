@@ -1,6 +1,6 @@
 import { Controller, Post } from '@nestjs/common';
 import { EntryType } from 'generated/prisma/enums';
-import { LedgerService } from 'src/ledger/ledger.service';
+import { LedgerService } from 'ledger/ledger.service';
 
 @Controller('ledger-test')
 export class LedgerTestController {

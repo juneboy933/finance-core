@@ -1,7 +1,7 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { MpesaStkPushQueueService } from './mpesa-stk-push.queue';
-import { InitiateSTKDto } from 'src/mpesa/dto/initiateSTK.dto';
-import { RateLimiterGuard } from 'src/rate-limiter/rate-limiter/rate-limiter.guard';
+import { RateLimiterGuard } from 'rate-limiter/rate-limiter/rate-limiter.guard';
+import { InitiateSTKDto } from 'mpesa/dto/initiateSTK.dto';
 
 @Controller('mpesa')
 export class MpesaStkPushController {

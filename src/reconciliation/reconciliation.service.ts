@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from 'generated/prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 import mockMpesaStatement from './mock-mpesa-statement.json';
+import { PrismaService } from 'prisma/prisma.service';
 
 export interface StatementEntry {
   mpesaReceiptNumber: string;

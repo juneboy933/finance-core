@@ -1,10 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { MpesaModule } from 'src/mpesa/mpesa.module';
 import { MpesaStkPushQueueService } from './mpesa-stk-push.queue';
 import { MpesaStkPushProcessor } from './mpesa-stk-push.processor';
 import { MpesaStkPushController } from './mpesa-stk-push.controller';
-import { RateLimiterModule } from 'src/rate-limiter/rate-limiter.module';
+import { MpesaModule } from 'mpesa/mpesa.module';
+import { RateLimiterModule } from 'rate-limiter/rate-limiter.module';
 
 @Module({
   imports: [

@@ -9,9 +9,9 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import Redis from 'ioredis';
 import { InitiateSTKDto } from './dto/initiateSTK.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { AccountType, EntryType } from 'generated/prisma/enums';
-import { LedgerService } from 'src/ledger/ledger.service';
+import { PrismaService } from 'prisma/prisma.service';
+import { LedgerService } from 'ledger/ledger.service';
 
 export interface StkResponse {
   MerchantRequestID: string;
