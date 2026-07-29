@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RateLimiterService } from './rate-limiter.service';
+import { ConfigModule } from '@nestjs/config';
 
 describe('RateLimiterService', () => {
   let service: RateLimiterService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ isGlobal: true })],
       providers: [RateLimiterService],
     }).compile();
 
