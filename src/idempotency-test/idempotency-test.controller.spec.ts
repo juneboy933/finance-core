@@ -7,8 +7,10 @@ import { IdempotencyService } from 'idempotency/idempotency.service';
 describe('IdempotencyTestController', () => {
   let controller: IdempotencyTestController;
 
+  let module: TestingModule;
+
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true })],
       controllers: [IdempotencyTestController],
       providers: [
@@ -27,5 +29,11 @@ describe('IdempotencyTestController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  afterAll(async () => {
+    if (module && typeof (module as any).close === 'function') {
+      await (module as any).close();
+    }
   });
 });

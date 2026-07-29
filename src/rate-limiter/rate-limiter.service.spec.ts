@@ -17,4 +17,18 @@ describe('RateLimiterService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  afterAll(async () => {
+    try {
+      const redis = (service as any)?.redis;
+      if (redis && typeof redis.disconnect === 'function') {
+        await redis.disconnect();
+      }
+      if (redis && typeof redis.quit === 'function') {
+        await redis.quit();
+      }
+    } catch (err) {
+      // ignore cleanup errors
+    }
+  });
 });

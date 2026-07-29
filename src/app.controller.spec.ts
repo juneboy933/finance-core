@@ -5,9 +5,10 @@ import { ConfigModule } from '@nestjs/config';
 
 describe('AppController', () => {
   let appController: AppController;
+  let app: TestingModule;
 
   beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
+    app = await Test.createTestingModule({
       controllers: [AppController],
       imports: [ConfigModule.forRoot({ isGlobal: true })],
       providers: [AppService],
@@ -19,6 +20,12 @@ describe('AppController', () => {
   describe('root', () => {
     it('should return the app greeting', () => {
       expect(appController.getHello()).toBe('Hello from fintech-core API!');
+    });
+
+    afterAll(async () => {
+      if (app && typeof (app as any).close === 'function') {
+        await (app as any).close();
+      }
     });
   });
 });
