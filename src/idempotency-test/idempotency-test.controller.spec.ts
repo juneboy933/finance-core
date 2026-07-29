@@ -9,7 +9,9 @@ describe('IdempotencyTestController', () => {
       controllers: [IdempotencyTestController],
     }).compile();
 
-    controller = module.get<IdempotencyTestController>(IdempotencyTestController);
+    controller = module.get<IdempotencyTestController>(
+      IdempotencyTestController,
+    );
   });
 
   it('should be defined', () => {

@@ -10,6 +10,7 @@ import {
 import { Observable, of, tap } from 'rxjs';
 import { IdempotencyService } from '../idempotency.service';
 import { Request } from 'express';
+import type { StkCallbackBody } from 'mpesa/mpesa.service';
 
 @Injectable()
 export class MpesaCallbackIdempotencyInterceptor implements NestInterceptor {
@@ -23,8 +24,8 @@ export class MpesaCallbackIdempotencyInterceptor implements NestInterceptor {
     next: CallHandler,
   ): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest<Request>();
-    const idempotencyKey = request.body?.Body?.stkCallback
-      ?.CheckoutRequestID as string;
+    const body = request.body as StkCallbackBody;
+    const idempotencyKey = body?.Body?.stkCallback?.CheckoutRequestID;
     if (!idempotencyKey)
       throw new BadRequestException(
         'Missing CheckoutRequestID from callback body',
