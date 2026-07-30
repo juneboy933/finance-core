@@ -502,3 +502,40 @@ identically to local development. Confirmed real functional correctness
 inside the running container and receiving a genuine Daraja OAuth token
 -- proving both internal (Postgres/Redis) and external (internet)
 networking work correctly from within Docker.
+
+### Day 9 — GitHub Actions CI/CD
+
+**Problem:** correctness checks (lint, test, build) only ran if manually
+remembered locally -- nothing stopped broken code, a failing test, or a
+build regression from reaching main.
+
+**Built:** a GitHub Actions workflow triggered on every push/PR to main,
+running on a genuinely clean Ubuntu runner with Postgres and Redis as
+service containers, executing: checkout, install, prisma generate,
+lint, test, build -- in sequence, blocking merge on any failure.
+
+**What a clean environment revealed that local testing had masked:**
+
+- Jest doesn't read tsconfig.json's `baseUrl` -- non-relative imports
+  like `'mpesa/mpesa.service'` worked locally (via ts-node/Nest's own
+  resolver) but failed under Jest until `modulePaths` was added to
+  explicitly tell Jest to resolve from the same root
+- Prisma 7's generator emits ESM-style imports with explicit `.js`
+  extensions internally, which Jest's default resolver can't match to
+  the actual `.ts` files on disk -- fixed with a `moduleNameMapper`
+  rewrite rule, a known pattern for this exact Prisma+Jest combination
+- Several isolated unit test modules constructed services/controllers
+  without `ConfigModule`, which only "worked" locally because the real
+  app's global ConfigModule registration was never actually exercised
+  by these narrow test modules in the first place
+- A base `tsconfig.json`/`tsconfig.build.json` split was needed so
+  linting could cover `test/` without conflicting with the build's
+  `rootDir` constraint on `src/` only
+
+**Why this matters:** every one of these was a genuine, previously
+invisible gap -- not because the code was wrong, but because local
+development had accumulated state (a warm module cache, an
+already-configured environment) that a truly clean machine doesn't
+have. This is the concrete version of "works on my machine is not
+proof it works," directly informing Day 8's Docker work and applying
+equally to CI.
