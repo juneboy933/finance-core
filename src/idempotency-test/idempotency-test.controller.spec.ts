@@ -32,8 +32,6 @@ describe('IdempotencyTestController', () => {
   });
 
   afterAll(async () => {
-    if (module && typeof (module as any).close === 'function') {
-      await (module as any).close();
-    }
+    await module.close();
   });
 });

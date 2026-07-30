@@ -23,9 +23,7 @@ describe('AppController', () => {
     });
 
     afterAll(async () => {
-      if (app && typeof (app as any).close === 'function') {
-        await (app as any).close();
-      }
+      await app.close();
     });
   });
 });

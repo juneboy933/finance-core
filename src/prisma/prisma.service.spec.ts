@@ -17,13 +17,6 @@ describe('PrismaService', () => {
   });
 
   afterAll(async () => {
-    // Ensure Prisma client disconnects to prevent Jest open handle warnings
-    try {
-      if (service && typeof (service as any).$disconnect === 'function') {
-        await (service as any).$disconnect();
-      }
-    } catch (err) {
-      // ignore cleanup errors
-    }
+    await service.$disconnect();
   });
 });
