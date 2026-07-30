@@ -5,11 +5,21 @@ import { ConfigModule } from '@nestjs/config';
 
 describe('IdempotencyInterceptor', () => {
   let interceptor: IdempotencyInterceptor;
+  let module: TestingModule;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true })],
-      providers: [IdempotencyInterceptor, IdempotencyService],
+      providers: [
+        IdempotencyInterceptor,
+        {
+          provide: IdempotencyService,
+          useValue: {
+            claim: jest.fn(),
+            complete: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     interceptor = module.get<IdempotencyInterceptor>(IdempotencyInterceptor);
@@ -17,5 +27,9 @@ describe('IdempotencyInterceptor', () => {
 
   it('should be defined', () => {
     expect(interceptor).toBeDefined();
+  });
+
+  afterEach(async () => {
+    await module.close();
   });
 });

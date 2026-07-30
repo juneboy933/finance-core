@@ -1,9 +1,13 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 @Injectable()
-export class RateLimiterService {
+export class RateLimiterService implements OnModuleDestroy {
   private redis: Redis;
 
   private readonly rateLimitScript = `
@@ -30,6 +34,10 @@ export class RateLimiterService {
     const redisUrl = this.configService.get<string>('REDIS_URL');
     if (!redisUrl) throw new InternalServerErrorException('Missing REDIS_URL');
     this.redis = new Redis(redisUrl);
+  }
+
+  onModuleDestroy() {
+    this.redis.disconnect();
   }
 
   async checkRateLimit(userId: string) {

@@ -2,11 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RateLimiterService } from './rate-limiter.service';
 import { ConfigModule } from '@nestjs/config';
 
+jest.mock('ioredis', () => {
+  const Redis = jest.fn().mockImplementation(() => ({
+    disconnect: jest.fn(),
+    eval: jest.fn(),
+  }));
+
+  return { __esModule: true, default: Redis };
+});
+
 describe('RateLimiterService', () => {
   let service: RateLimiterService;
+  let module: TestingModule;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true })],
       providers: [RateLimiterService],
     }).compile();
@@ -18,17 +28,7 @@ describe('RateLimiterService', () => {
     expect(service).toBeDefined();
   });
 
-  afterAll(async () => {
-    try {
-      const redis = (service as any)?.redis;
-      if (redis && typeof redis.disconnect === 'function') {
-        await redis.disconnect();
-      }
-      if (redis && typeof redis.quit === 'function') {
-        await redis.quit();
-      }
-    } catch (err) {
-      // ignore cleanup errors
-    }
+  afterEach(async () => {
+    await module.close();
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
@@ -6,7 +6,7 @@ type IdempotencyRecord =
   { status: 'processing' } | { status: 'completed'; response: unknown };
 
 @Injectable()
-export class IdempotencyService {
+export class IdempotencyService implements OnModuleDestroy {
   private redis: Redis;
 
   constructor(private readonly configService: ConfigService) {
@@ -15,6 +15,10 @@ export class IdempotencyService {
       throw new Error('REDIS_URL is not defined');
     }
     this.redis = new Redis(redisUrl);
+  }
+
+  onModuleDestroy() {
+    this.redis.disconnect();
   }
 
   async claim(idempotency: string): Promise<'claimed' | IdempotencyRecord> {
