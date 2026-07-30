@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -41,7 +42,7 @@ export interface StkCallbackBody {
 }
 
 @Injectable()
-export class MpesaService {
+export class MpesaService implements OnModuleDestroy {
   private redis: Redis;
 
   constructor(
@@ -52,6 +53,10 @@ export class MpesaService {
     const redisUrl = this.configService.get<string>('REDIS_URL');
     if (!redisUrl) throw new InternalServerErrorException('Missing REDIS_URL');
     this.redis = new Redis(redisUrl);
+  }
+
+  onModuleDestroy() {
+    this.redis.disconnect();
   }
 
   async getAccessToken() {
