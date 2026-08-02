@@ -25,6 +25,15 @@ export class LedgerService {
         'A transaction required at least two entries.',
       );
 
+    // Check that the entry amount is greater or equal to 0
+    for (const entry of entries) {
+      if (new Prisma.Decimal(entry.amount).lessThanOrEqualTo(0)) {
+        throw new BadRequestException(
+          `Entry amount must be a positive value (received: ${entry.amount})`,
+        );
+      }
+    }
+
     // validate sum(CREDIT) === sum(DEBIT)
     const creditEntries = entries.filter(
       (e) => e.entryType === EntryType.CREDIT,

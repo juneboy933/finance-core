@@ -23,4 +23,20 @@ export class LedgerTestController {
       { accountId: '003', amount: '40', entryType: EntryType.CREDIT },
     ]);
   }
+
+  @Post('negative-amount-attack')
+  testNegativeAmount() {
+    return this.ledger.recordTransaction([
+      {
+        accountId: '002',
+        amount: '-100',
+        entryType: EntryType.DEBIT,
+      },
+      {
+        accountId: '003',
+        amount: '-100',
+        entryType: EntryType.CREDIT,
+      },
+    ]);
+  }
 }
