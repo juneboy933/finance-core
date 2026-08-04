@@ -539,3 +539,138 @@ already-configured environment) that a truly clean machine doesn't
 have. This is the concrete version of "works on my machine is not
 proof it works," directly informing Day 8's Docker work and applying
 equally to CI.
+
+### Post-Review Hardening — Ledger Validation, Idempotent Initiation, and a Real Environment Debugging Saga
+
+**Context:** requested an independent code review of the full system.
+It correctly identified several real gaps despite the underlying
+architecture (idempotency, double-entry ledger, retries, rate limiting,
+reconciliation) being sound: the ledger accepted mathematically-balanced
+but invalid amounts, and BullMQ's retry mechanism (Day 5) made the
+system _reliable_ without making the STK push _initiation call itself_
+idempotent -- a genuine gap between "retries work" and "retries are safe."
+
+#### Fix 1 — Ledger amount validation
+
+`LedgerService.recordTransaction()` validated that `sum(DEBIT) ===
+sum(CREDIT)`, but never validated that each individual entry's amount
+was positive. A transaction with a DEBIT of -100 and a CREDIT of -100
+summed to equal and was accepted, despite representing no real,
+valid movement of money. Fixed by adding a per-entry positivity check
+(`Prisma.Decimal(entry.amount).lessThanOrEqualTo(0)`) before the balance
+check runs. Verified: the happy path is unaffected; a deliberate
+negative-amount attempt is rejected with a 400 before touching the
+database, confirmed via Prisma Studio that zero rows were written.
+
+#### Fix 2 — Pre-initiation idempotency for STK push retries
+
+**The gap:** if `MpesaStkPushProcessor` calls Daraja and the connection
+drops _after_ Daraja actually received and processed the request but
+_before_ the response reaches the server, BullMQ's automatic retry
+(Day 5) would fire a genuinely new STK push to the same customer --
+Day 1's idempotency guard only protects the inbound _callback_, never
+the outbound _initiation_ call.
+
+**Built:**
+
+- A new `StkPushAttempt` model, keyed by the BullMQ job's own ID,
+  tracking one initiation attempt independently of `Transaction`/
+  `LedgerEntry` -- claimed _before_ Daraja is ever called
+- Three states: `ATTEMPTED` (sent, outcome unknown), `SUCCESS`
+  (confirmed, response stored), `FAILED` (confirmed rejection, safe
+  to retry as a fresh attempt)
+- The processor checks this record before every attempt: `SUCCESS`
+  returns the stored result without recalling Daraja; `FAILED` is
+  safe to proceed (uses `upsert`, not `create`, since a record may
+  already exist for this job ID); `ATTEMPTED` refuses to retry at
+  all, since the outcome is genuinely unknown
+
+**The key design decision:** split `MpesaService`'s STK push error
+handling into two distinct exception types, rather than one generic
+failure:
+
+- `DarajaRejectionException` -- Daraja's application layer actually
+  responded with a real rejection (a genuine HTTP error response).
+  Confirmed outcome, safe to mark `FAILED` and retry.
+- `DarajaNetworkException` -- no response was received at all (network
+  drop, timeout, or a 502/503/504 gateway-level failure suggesting the
+  request never reached Daraja's actual application logic). Genuinely
+  ambiguous -- must NOT be assumed failed, since Daraja may have
+  processed it.
+
+Both exceptions self-declare an `isRetryable` flag, so the processor
+doesn't need separate knowledge of which class means what -- the
+exception communicates its own safety classification.
+
+**Verified with three real tests against the live sandbox, via Docker:**
+
+1. Happy path -- `StkPushAttempt` correctly created and updated to
+   `SUCCESS` with the real `checkoutRequestId`
+2. Confirmed rejection (invalid shortcode) -- correctly threw
+   `DarajaRejectionException`, record marked `FAILED`, a fresh request
+   afterward proceeded normally
+3. Genuinely unreachable endpoint (a non-routable IP, to realistically
+   simulate a hung connection rather than a URL-parsing edge case) --
+   correctly threw `DarajaNetworkException`, the record was left at
+   `ATTEMPTED` and never falsely updated, and BullMQ's automatic retry
+   correctly hit the `ATTEMPTED` branch and refused to call Daraja
+   again -- the exact duplicate-STK-push scenario the review flagged
+   is now provably blocked, not just theoretically fixed
+
+**Known residual gap, noted rather than silently assumed away:** an
+error that's neither of the two Daraja-specific exception types (e.g.
+a local configuration/URL construction error) currently falls through
+to the generic catch-all and is treated as confirmed-`FAILED` by
+default. This is likely correct in practice -- if the request never
+left the server, there's no real risk of a duplicate -- but it's a
+case-by-case assumption worth revisiting rather than a guarantee.
+
+**Not yet built:** integration with Daraja's STK Push Query API, which
+would let the `ATTEMPTED`/unknown-outcome case resolve automatically
+in real time (asking Daraja directly "did this complete?") rather than
+only refusing and waiting for manual or scheduled reconciliation.
+
+#### A real environment debugging saga, worth documenting honestly
+
+A large portion of this session was lost to environment issues that
+had nothing to do with the code itself, but are genuinely valuable,
+transferable lessons:
+
+- **OneDrive-synced project folder actively interfered with the build
+  process.** Compiling TypeScript creates and rewrites large numbers
+  of small files rapidly; OneDrive's real-time sync watching that same
+  folder intermittently locked or interfered with those writes,
+  silently, with zero error surfaced by any build tool. Confirmed by
+  copying the entire project to a non-synced location (`C:\dev\...`),
+  after which the identical build succeeded. **Lesson: never actively
+  develop inside a cloud-sync folder (OneDrive/Dropbox/Google Drive)
+  -- keep code in a plain local directory and rely on git for backup.**
+- **A stale TypeScript incremental build cache (`.tsbuildinfo`) carried
+  over from the old file path caused a second, compounding failure.**
+  These files record absolute paths from wherever the project was last
+  built; after moving the project, the cache still referenced the old
+  OneDrive path, so TypeScript incorrectly believed most files were
+  already built and silently skipped re-emitting them -- only files it
+  couldn't match to stale cache entries (coincidentally, the Prisma-
+  generated client) were actually compiled. Deleting both
+  `.tsbuildinfo` files and rebuilding fresh resolved it completely.
+  **Lesson: any cache file that stores absolute file paths becomes
+  actively dangerous the moment a project is moved, copied, or
+  containerized -- treat it as suspect, not trusted, after any such
+  move.**
+- **The same stale-cache problem recurred one layer deeper, inside the
+  Docker build itself**, since `COPY . .` in the Dockerfile copied the
+  freshly-regenerated (but still host-machine-path-tagged)
+  `.tsbuildinfo` files into the container, where paths again didn't
+  match. Fixed permanently by adding `*.tsbuildinfo` to
+  `.dockerignore`, ensuring every Docker build starts from a genuinely
+  clean TypeScript compile regardless of local cache state -- the
+  correct, permanent fix, rather than remembering to manually delete
+  cache files before every build.
+
+This detour cost real time, but the underlying skill -- methodically
+isolating variables (bypassing npm, running `tsc` directly, checking
+`--listFiles`, testing outside the synced folder) rather than guessing
+-- is exactly the debugging discipline this whole program has been
+built to develop, and it was applied correctly here under genuine,
+unscripted pressure.
