@@ -41,6 +41,14 @@ export interface StkCallbackBody {
   };
 }
 
+export class DarajaNetworkException extends ServiceUnavailableException {
+  readonly isRetryable = true;
+}
+
+export class DarajaRejectionException extends BadRequestException {
+  readonly isRetryable = false;
+}
+
 @Injectable()
 export class MpesaService implements OnModuleDestroy {
   private redis: Redis;
@@ -217,15 +225,23 @@ export class MpesaService implements OnModuleDestroy {
 
       return result.data;
     } catch (error) {
-      const darajaMessage =
-        axios.isAxiosError(error) && error.response
-          ? JSON.stringify(error.response.data)
-          : error instanceof Error
-            ? error.message
-            : String(error);
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const responseData = JSON.stringify(error.response?.data ?? {});
 
-      throw new ServiceUnavailableException(
-        `Failed to initiate STK Push:${darajaMessage}`,
+        if (!error.response || (status && status >= 502)) {
+          throw new DarajaNetworkException(
+            `Network error or server error from Daraja: ${responseData}`,
+          );
+        }
+
+        throw new DarajaRejectionException(
+          `Daraja rejected the request: ${responseData}`,
+        );
+      }
+
+      throw new InternalServerErrorException(
+        `Unexpected error during STK push: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

@@ -127,3 +127,23 @@ model ReconciliationRecord {
 
   created_at DateTime @default(now())
 }
+
+enum StkAttemptStatus {
+  ATTEMPTED
+  SUCCESS
+  FAILED
+}
+
+model StkPushAttempt {
+  id                String    @id @default(uuid())
+
+  jobId             String      @unique
+  phoneNumber       String? 
+  amount            Decimal? @db.Decimal(12, 2)
+  checkoutRequestId String?  @unique
+  status            StkAttemptStatus  @default(ATTEMPTED)
+  response          Json?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt()
+}
