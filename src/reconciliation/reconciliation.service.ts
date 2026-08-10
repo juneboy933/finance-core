@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+// import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from 'generated/prisma/client';
-import mockMpesaStatement from './mock-mpesa-statement.json';
 import { PrismaService } from 'prisma/prisma.service';
 
 export interface StatementEntry {
@@ -26,12 +25,17 @@ export class ReconciliationService {
   private readonly logger = new Logger(ReconciliationService.name);
   constructor(private readonly prismaService: PrismaService) {}
 
-  @Cron(CronExpression.EVERY_HOUR)
-  async scheduleReconcile() {
-    this.logger.log('Running scheduled reconciliation...');
-    const result = await this.reconcile(mockMpesaStatement);
-    await this.persistAndLog(result);
-  }
+  // TODO(Week 6): Re-enable once a real M-Pesa statement source (SFTP/API pull)
+  // replaces the mock fixture. Currently disabled to stop polluting
+  // reconciliationRecord with fake mismatches. See fintech-core remediation plan.
+
+  // @Cron(CronExpression.EVERY_HOUR)
+  // async scheduleReconcile() {
+  //   this.logger.log('Running scheduled reconciliation...');
+  //   const result = await this.reconcile(mockMpesaStatement);
+  //   await this.persistAndLog(result);
+  // }
+
   async reconcile(
     statements: StatementEntry[],
   ): Promise<ReconciliationResults[]> {
