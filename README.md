@@ -52,6 +52,3 @@ each day tackles a real fintech engineering concern, with reasoning,
 testing, and honest documentation of what broke along the way.
 
 Full day-by-day log: [docs/PROGRESS.md](./docs/PROGRESS.md)
-
-**Latest:** Day 6 — sliding-window rate limiting on payment endpoints,
-using an atomic Redis Lua script to close a real concurrency race.

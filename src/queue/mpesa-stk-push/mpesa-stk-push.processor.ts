@@ -2,10 +2,20 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { StkPushJobData } from './dto/mpesa-stk-push.dto';
-import { MpesaService, DarajaNetworkException } from 'mpesa/mpesa.service';
+import {
+  MpesaService,
+  DarajaNetworkException,
+  DarajaRejectionException,
+} from 'mpesa/mpesa.service';
 import { PrismaService } from 'prisma/prisma.service';
 
-@Processor('mpesa-stk-push')
+@Processor('mpesa-stk-push', {
+  concurrency: 2,
+  limiter: {
+    max: 2,
+    duration: 1000,
+  },
+})
 export class MpesaStkPushProcessor extends WorkerHost {
   private readonly logger = new Logger(MpesaStkPushProcessor.name);
 
@@ -38,9 +48,10 @@ export class MpesaStkPushProcessor extends WorkerHost {
       };
     }
 
+    // Allow re-execution if status is ATTEMPTED
     if (existingAttempt?.status === 'ATTEMPTED') {
       throw new Error(
-        `Job ${jobId}'s previous attempt has an unknown outcome. Refusing to retry without verification.`,
+        `Job ${jobId}'s previous attempt has an unknown outcome. Refusing to execute without verification.`,
       );
     }
 
@@ -67,23 +78,6 @@ export class MpesaStkPushProcessor extends WorkerHost {
       const checkoutRequestId = response.CheckoutRequestID;
 
       if (!checkoutRequestId) {
-        await this.prisma.stkPushAttempt.update({
-          where: { jobId },
-          data: {
-            status: 'FAILED',
-            response: {
-              errorMessage: 'Missing CheckoutRequestID in Mpesa response',
-              rawResponse: {
-                MerchantRequestID: response?.MerchantRequestID,
-                CheckoutRequestID: response?.CheckoutRequestID,
-                ResponseCode: response?.ResponseCode,
-                ResponseDescription: response?.ResponseDescription,
-                CustomerMessage: response?.CustomerMessage,
-              },
-            },
-          },
-        });
-
         throw new Error('Missing CheckoutRequestID in Mpesa response');
       }
 
@@ -107,8 +101,14 @@ export class MpesaStkPushProcessor extends WorkerHost {
         data: updatedAttempt.response,
       };
     } catch (error) {
-      const isRetryable = error instanceof DarajaNetworkException;
+      const isThrottled =
+        error instanceof DarajaRejectionException &&
+        error.message.includes('500.003.02');
 
+      const isRetryable =
+        error instanceof DarajaNetworkException || isThrottled;
+
+      // If non-retryable, mark failed immediately in DB
       if (!isRetryable) {
         await this.prisma.stkPushAttempt.update({
           where: { jobId },
@@ -126,18 +126,14 @@ export class MpesaStkPushProcessor extends WorkerHost {
           `Job ${jobId} failed with a non-retryable error: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          error instanceof Error ? error.stack : undefined,
         );
-
-        throw error;
+      } else {
+        this.logger.warn(
+          `Job ${jobId} failed with a retryable error (attempt ${job.attemptsMade + 1}): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
       }
-
-      this.logger.warn(
-        `Job ${jobId} failed with a retryable error: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        error instanceof Error ? error.stack : undefined,
-      );
 
       throw error;
     }
@@ -150,12 +146,27 @@ export class MpesaStkPushProcessor extends WorkerHost {
       return;
     }
 
+    const jobId = job.id?.toString();
     const maxAttempts = job.opts.attempts ?? 1;
 
+    // Execute final state updates when retries are completely exhausted
     if (job.attemptsMade >= maxAttempts) {
       this.logger.error(
-        `Job ${job.id} permanently failed after ${job.attemptsMade} attempts: ${error.message}`,
+        `Job ${jobId} permanently failed after ${job.attemptsMade} attempts: ${error.message}`,
       );
+
+      if (jobId) {
+        await this.prisma.stkPushAttempt.update({
+          where: { jobId },
+          data: {
+            status: 'FAILED',
+            response: {
+              errorMessage: `Exhausted ${job.attemptsMade} attempts: ${error.message}`,
+              errorStack: error.stack,
+            },
+          },
+        });
+      }
 
       await this.prisma.deadLetter.create({
         data: {
@@ -163,7 +174,7 @@ export class MpesaStkPushProcessor extends WorkerHost {
           data: {
             phoneNumber: job.data.phoneNumber,
             amount: job.data.amount,
-            jobId: job.id,
+            jobId: jobId,
           },
           reason: error.message,
         },

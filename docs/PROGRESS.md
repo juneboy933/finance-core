@@ -674,3 +674,97 @@ isolating variables (bypassing npm, running `tsc` directly, checking
 -- is exactly the debugging discipline this whole program has been
 built to develop, and it was applied correctly here under genuine,
 unscripted pressure.
+
+### Day 10 — Load Testing with k6
+
+**Goal:** measure real system throughput under genuine concurrent load,
+using k6 against the live `/mpesa/stk-push` endpoint -- specifically to
+answer "how many distinct customers can pay per second," not just
+"does the endpoint respond."
+
+**Planning insight, worth stating explicitly:** a load test's result is
+only meaningful if it accurately simulates real usage. Two specific
+risks identified before writing any script: (1) measuring only the
+HTTP response of an endpoint whose actual job is to enqueue work
+asynchronously tells you nothing about whether the queue, worker, or
+database underneath can keep up; (2) reusing the same test input (e.g.
+one phone number) can trigger the system's own defenses (Day 6's rate
+limiter), producing a false "system is broken" result when it's
+actually working correctly. Both predictions were later confirmed by
+real test runs.
+
+**Built:** `load-test/stk-push.js`, generating a distinct, validly-
+formatted Kenyan phone number (`2547`/`2541` + 8 digits) per request
+using k6's `__VU`/`__ITER` globals, so every simulated request looks
+like a genuinely new customer rather than tripping the rate limiter.
+
+**A real bug found and fixed in the test script itself:** the initial
+phone number generator used `padStart(8, '0')` without a corresponding
+length cap. `padStart` only pads short strings -- it never truncates
+long ones -- so once `__VU`/`__ITER` combined exceeded 8 digits (which
+happened reliably as the test ran longer), generated numbers grew past
+12 characters and were rejected by the app's own phone validation.
+This produced a misleading "0 SUCCESS / 675 FAILED" result that looked
+like a catastrophic system failure, but was actually 100% a test
+script bug -- confirmed by reading the actual stored error message
+("Invalid phone number format") rather than assuming it meant Daraja
+was overwhelmed. Fixed with `.slice(-8)` to force an exact, fixed
+length regardless of how large the combined VU/iteration numbers grew.
+
+**The core finding, once the script itself was correct:** k6 reported
+100% HTTP success at ~8-9 requests/second throughout every run -- the
+`/stk-push` endpoint itself never slowed down or errored. But checking
+the real ground truth (the `StkPushAttempt` table, not the HTTP layer)
+told a completely different story: roughly 47% real success rate under
+sustained load (1033 SUCCESS / 1027 FAILED / 156 ATTEMPTED across
+accumulated test runs). Confirmed via direct SQL query that every
+FAILED record carried the identical Daraja error `500.003.02 "System
+is busy. Please try again in few minutes."` -- a genuine, confirmed
+rejection from Safaricom's sandbox, correctly classified as
+`DarajaRejectionException` and correctly recorded, not silently lost.
+
+**This is the actual point of load testing, proven concretely:** the
+HTTP-layer "100% success" and the real payment success rate are two
+completely different numbers, and only checking the first would have
+produced a false, dangerously optimistic picture of system health.
+The genuine bottleneck under load is Safaricom's own sandbox rate
+limit -- not this system's endpoint, queue, worker, or database, none
+of which showed any failure or meaningful slowdown throughout testing.
+
+**Also found live: a real regression, introduced while investigating
+the high ATTEMPTED count.** In response to seeing many jobs stuck in
+`ATTEMPTED`, a condition was added to `MpesaStkPushProcessor` allowing
+retries to bypass the "unknown outcome, refuse to proceed" check
+whenever `job.attemptsMade > 0`. Tracing through the actual scenario
+this was built to prevent showed the fix was backwards: the _first_
+retry after a genuinely ambiguous outcome is exactly attempt
+`attemptsMade === 1`, meaning the new condition let the single most
+dangerous case -- a retry after an unconfirmed prior attempt -- bypass
+the safeguard entirely, silently reopening the duplicate-STK-push gap
+Fix 2 (prior session) was built to close. `ATTEMPTED` jobs correctly
+refusing to retry is the intended, safe behavior for a genuinely
+unresolved outcome, not a bug to route around -- the real fix for a
+high ATTEMPTED count is the still-planned Daraja STK Push Query API
+integration, which resolves ambiguity rather than ignoring it.
+
+**Also adjusted, as a reasonable response to real evidence:** the
+`MpesaStkPushProcessor`'s `@Processor` decorator now sets
+`concurrency: 2` and a `limiter` of 2 jobs/second, throttling this
+worker's own call rate against Daraja proactively, rather than relying
+solely on retries to absorb sandbox rate limiting after the fact. Also
+reclassified `500.003.02` specifically as retryable, distinguishing a
+transient "system busy" rejection from a genuinely permanent one (e.g.
+invalid credentials).
+
+**Debugging habit reinforced:** when a result looks catastrophic (0%
+success), read the actual stored error text before concluding anything
+about the cause. The first instinct -- "Daraja must be rate limiting
+us under load" -- was plausible-sounding and completely wrong; the
+real cause was a boundary bug in `padStart` usage in the test script
+itself, only found by checking the literal error message rather than
+trusting a plausible narrative.
+
+**Not yet built:** Daraja's STK Push Query API integration, still the
+correct long-term resolution for the `ATTEMPTED`/unknown-outcome case
+-- today's regression is a direct, concrete argument for why it's
+worth prioritizing.
