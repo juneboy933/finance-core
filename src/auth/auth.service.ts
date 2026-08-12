@@ -1,8 +1,7 @@
 import {
   Injectable,
-  BadRequestException,
-  NotFoundException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { RegisterUserDto } from './dto/register.user.dto';
@@ -40,6 +39,13 @@ export class AuthService {
           phone_number: dto.phone,
           password: hashedPassword,
         },
+        select: {
+          id: true,
+          email: true,
+          phone_number: true,
+          created_at: true,
+          updated_at: true,
+        },
       });
 
       await tx.account.create({
@@ -52,11 +58,9 @@ export class AuthService {
       return newUser;
     });
 
-    const { password, ...userWithoutPassword } = result;
-
     return {
       message: 'User registered successfully',
-      data: userWithoutPassword,
+      data: result,
     };
   }
 
@@ -68,17 +72,20 @@ export class AuthService {
 
     // If user never exists throw an error
     if (!user) {
-      throw new NotFoundException('Invalid email or password');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     // Compare password with hashed password
     const isPasswordValid = await argon2.verify(user.password, dto.password);
 
     if (!isPasswordValid) {
-      throw new BadRequestException('Invalid email or password');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
-    const { password, ...userWithoutPassword } = user;
+    // Create a shallow copy and delete the property without creating an unused variable
+    const userWithoutPassword = { ...user };
+    delete (userWithoutPassword as { password?: string }).password;
+
     // If password is correct, return user data
     return {
       message: 'Login successful',
