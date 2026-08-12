@@ -11,6 +11,7 @@ import { MpesaStkPushQueueModule } from './queue/mpesa-stk-push/mpesa-stk-push.m
 import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     MpesaStkPushQueueModule,
     RateLimiterModule,
     ReconciliationModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
