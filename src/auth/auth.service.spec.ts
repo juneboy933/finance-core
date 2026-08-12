@@ -5,7 +5,6 @@ import { PrismaService } from 'prisma/prisma.service';
 describe('AuthService', () => {
   let service: AuthService;
 
-  // Mock PrismaService methods with typed transaction callback
   const mockPrismaService = {
     user: {
       findFirst: jest.fn(),
@@ -33,7 +32,8 @@ describe('AuthService', () => {
       ],
     }).compile();
 
-    service = module.get<AuthService>(AuthService);
+    // Pass generic arguments twice <Type, Type> to prevent 'any' return signature
+    service = module.get<AuthService, AuthService>(AuthService);
   });
 
   it('should be defined', () => {
