@@ -14,11 +14,9 @@ describe('AuthService', () => {
     account: {
       create: jest.fn(),
     },
-    $transaction: jest.fn(
-      <T>(cb: (tx: typeof mockPrismaService) => Promise<T>): Promise<T> => {
-        return cb(mockPrismaService);
-      },
-    ),
+    $transaction: jest.fn(<T>(cb: (tx: unknown) => Promise<T>): Promise<T> => {
+      return cb(mockPrismaService);
+    }),
   };
 
   beforeEach(async () => {
@@ -32,8 +30,7 @@ describe('AuthService', () => {
       ],
     }).compile();
 
-    // Pass generic arguments twice <Type, Type> to prevent 'any' return signature
-    service = module.get<AuthService, AuthService>(AuthService);
+    service = module.get(AuthService) as AuthService;
   });
 
   it('should be defined', () => {
