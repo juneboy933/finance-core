@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { PrismaService } from 'prisma/prisma.service'; // Adjust path if needed
+import { PrismaService } from 'prisma/prisma.service';
 
 describe('AuthService', () => {
   let service: AuthService;
 
-  // Mock PrismaService methods used by AuthService
+  // Mock PrismaService methods with typed transaction callback
   const mockPrismaService = {
     user: {
       findFirst: jest.fn(),
@@ -15,7 +15,11 @@ describe('AuthService', () => {
     account: {
       create: jest.fn(),
     },
-    $transaction: jest.fn((callback) => callback(mockPrismaService)),
+    $transaction: jest.fn(
+      <T>(cb: (tx: typeof mockPrismaService) => Promise<T>): Promise<T> => {
+        return cb(mockPrismaService);
+      },
+    ),
   };
 
   beforeEach(async () => {
