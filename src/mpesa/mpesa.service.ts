@@ -13,6 +13,7 @@ import { InitiateSTKDto } from './dto/initiateSTK.dto';
 import { AccountType, EntryType } from 'generated/prisma/enums';
 import { PrismaService } from 'prisma/prisma.service';
 import { LedgerService } from 'ledger/ledger.service';
+import { normalizePhone } from 'shared/phone.util';
 
 export interface StkResponse {
   MerchantRequestID: string;
@@ -140,20 +141,6 @@ export class MpesaService implements OnModuleDestroy {
     return password;
   }
 
-  private normalizePhone(phone: string): string {
-    // '0712345678' , '+254712345678' -> '254712345678'
-    let normalized = phone.replace(/\D/g, '');
-    if (normalized.startsWith('0')) {
-      normalized = '254' + normalized.slice(1);
-    }
-
-    if (!/^254[17]\d{8}$/.test(normalized)) {
-      throw new BadRequestException('Invalid phone number format.');
-    }
-
-    return normalized;
-  }
-
   private getMetadataValue(
     items: StkCallbackMetadataItem[],
     name: string,
@@ -200,7 +187,7 @@ export class MpesaService implements OnModuleDestroy {
     const password = this.generatePassword();
     const timestamp = this.generateTimestamp();
 
-    const normalizedNumber = this.normalizePhone(dto.phoneNumber);
+    const normalizedNumber = normalizePhone(dto.phoneNumber);
 
     const payload = {
       BusinessShortCode: shortCode,
@@ -278,7 +265,9 @@ export class MpesaService implements OnModuleDestroy {
         'Missing MPESA_SETTLEMENT_ACCOUNT_ID',
       );
 
-    const walletID = await this.resolveWalletAccountId(String(phone));
+    const walletID = await this.resolveWalletAccountId(
+      normalizePhone(String(phone)),
+    );
 
     const transaction = await this.ledgerService.recordTransaction(
       [
@@ -297,7 +286,7 @@ export class MpesaService implements OnModuleDestroy {
         checkoutRequestId: stkCallback.CheckoutRequestID,
         mpesaReceiptNumber:
           receiptNumber !== undefined ? String(receiptNumber) : undefined,
-        phoneNumber: String(phone),
+        phoneNumber: normalizePhone(String(phone)),
       },
     );
 

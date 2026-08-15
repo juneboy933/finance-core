@@ -2,16 +2,23 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { RegisterUserDto } from './dto/register.user.dto';
 import * as argon2 from 'argon2';
 import { AccountType } from 'generated/prisma/enums';
 import { LoginUserDto } from './dto/login.user.dto';
+import { JwtService } from '@nestjs/jwt';
+import { createHash } from 'crypto';
+import { normalizePhone } from 'shared/phone.util';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(dto: RegisterUserDto) {
     // Check if the user already exists
@@ -31,12 +38,14 @@ export class AuthService {
       parallelism: 1,
     });
 
+    const normalizedNumber = normalizePhone(dto.phone);
+
     // Create new user associated with an account if the user never existed
     const result = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
           email: dto.email,
-          phone_number: dto.phone,
+          phone_number: normalizedNumber,
           password: hashedPassword,
         },
         select: {
@@ -82,6 +91,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    const tokenPayload = { sub: user.id };
+    const accessToken = this.jwtService.sign(tokenPayload);
+    const refreshToken = await this.issueRefreshToken(user.id);
+
     // Create a shallow copy and delete the property without creating an unused variable
     const userWithoutPassword = { ...user };
     delete (userWithoutPassword as { password?: string }).password;
@@ -90,6 +103,70 @@ export class AuthService {
     return {
       message: 'Login successful',
       data: userWithoutPassword,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  private async issueRefreshToken(userId: string) {
+    const refreshTokenPayload = { sub: userId };
+    const refreshKey = process.env.JWT_REFRESH_KEY;
+    if (!refreshKey) {
+      throw new InternalServerErrorException(
+        'Refresh key is not defined in environment variables',
+      );
+    }
+
+    const refreshToken = this.jwtService.sign(refreshTokenPayload, {
+      secret: refreshKey,
+      expiresIn: '7d', // Set the expiration time for the refresh token
+    });
+
+    const hashedRefreshToken = createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: userId,
+        hashedToken: hashedRefreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return refreshToken;
+  }
+
+  async validateToken(token: string) {
+    const incomingToken = createHash('sha256').update(token).digest('hex');
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { hashedToken: incomingToken },
+    });
+
+    if (!storedToken) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (storedToken.revoked || storedToken.expires_at < new Date()) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    return storedToken.userId;
+  }
+
+  async revokeRefreshToken(token: string) {
+    const incomingToken = createHash('sha256').update(token).digest('hex');
+
+    await this.validateToken(token);
+
+    await this.prisma.refreshToken.update({
+      where: { hashedToken: incomingToken },
+      data: { revoked: true },
+    });
+
+    return {
+      message: 'Refresh token revoked successfully',
     };
   }
 }

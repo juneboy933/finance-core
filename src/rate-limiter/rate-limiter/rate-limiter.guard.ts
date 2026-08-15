@@ -8,19 +8,21 @@ import {
 import { Request } from 'express';
 import { RateLimiterService } from '../rate-limiter.service';
 
+interface AuthenticatedUser extends Request {
+  user: { userId: string };
+}
+
 @Injectable()
 export class RateLimiterGuard implements CanActivate {
   constructor(private readonly rateLimiterService: RateLimiterService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
-    const body = request.body as { phoneNumber?: unknown } | undefined;
-    const identifier =
-      typeof body?.phoneNumber === 'string' ? body.phoneNumber : undefined;
+    const request = context.switchToHttp().getRequest<AuthenticatedUser>();
+    const identifier = request.user?.userId;
     if (!identifier)
       throw new HttpException(
-        'Phone number is required',
-        HttpStatus.BAD_REQUEST,
+        'RateLimiterGuard requires an authenticated request',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
 
     const allowed = await this.rateLimiterService.checkRateLimit(identifier);
