@@ -37,10 +37,26 @@ model User {
   email String @unique
   password String
 
+  refreshToken RefreshToken[]
   account Account[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt()
+}
+
+model RefreshToken {
+  id String @id @default(uuid())
+
+  userId String
+  user User @relation(fields: [userId], references: [id])
+
+  hashedToken String @unique
+  revoked Boolean @default(false)
+
+  created_at DateTime @default(now())
+  expires_at DateTime 
+
+  @@index([ userId ])
 }
 
 model Account {

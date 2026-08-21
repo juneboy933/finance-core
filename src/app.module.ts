@@ -7,19 +7,17 @@ import {
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { IdempotencyModule } from './idempotency/idempotency.module';
-import { IdempotencyTestModule } from './idempotency-test/idempotency-test.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LedgerModule } from './ledger/ledger.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { LedgerTestModule } from './ledger-test/ledger-test.module';
 import { MpesaModule } from './mpesa/mpesa.module';
-import { MpesaTestModule } from './mpesa-test/mpesa-test.module';
 import { BullModule } from '@nestjs/bullmq';
 import { MpesaStkPushQueueModule } from './queue/mpesa-stk-push/mpesa-stk-push.module';
 import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CorrelationIdMiddleware } from 'middleware/correlation-id/correlation-id.middleware';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -49,15 +47,13 @@ import { CorrelationIdMiddleware } from 'middleware/correlation-id/correlation-i
     }),
     ScheduleModule.forRoot(),
     IdempotencyModule,
-    IdempotencyTestModule,
     LedgerModule,
     PrismaModule,
-    LedgerTestModule,
     MpesaModule,
-    MpesaTestModule,
     MpesaStkPushQueueModule,
     RateLimiterModule,
     ReconciliationModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
