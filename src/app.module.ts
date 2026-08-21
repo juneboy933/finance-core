@@ -1,4 +1,9 @@
-import { InternalServerErrorException, Module } from '@nestjs/common';
+import {
+  InternalServerErrorException,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { IdempotencyModule } from './idempotency/idempotency.module';
@@ -14,6 +19,7 @@ import { MpesaStkPushQueueModule } from './queue/mpesa-stk-push/mpesa-stk-push.m
 import { RateLimiterModule } from './rate-limiter/rate-limiter.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { CorrelationIdMiddleware } from 'middleware/correlation-id/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -56,4 +62,8 @@ import { ScheduleModule } from '@nestjs/schedule';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}
