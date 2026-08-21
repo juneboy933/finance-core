@@ -9,6 +9,11 @@ import {
 } from 'mpesa/mpesa.service';
 import { PrismaService } from 'prisma/prisma.service';
 
+type MpesaStkPushQueueJob = {
+  data: StkPushJobData;
+  correlationId: string;
+};
+
 @Processor('mpesa-stk-push', {
   concurrency: 2,
   limiter: {
@@ -26,14 +31,15 @@ export class MpesaStkPushProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<StkPushJobData>) {
+  async process(job: Job<MpesaStkPushQueueJob>) {
+    const { data, correlationId } = job.data;
     const jobId = job.id?.toString();
     if (!jobId) {
       throw new Error('Job has no ID — cannot track idempotently');
     }
 
     this.logger.log(
-      `Processing mpesa-stk-push job: ${jobId}, attempt ${job.attemptsMade + 1}`,
+      `[${correlationId}] Processing mpesa-stk-push job: ${jobId}, attempt ${job.attemptsMade + 1}`,
     );
 
     const existingAttempt = await this.prisma.stkPushAttempt.findUnique({
@@ -61,8 +67,8 @@ export class MpesaStkPushProcessor extends WorkerHost {
       where: { jobId },
       create: {
         jobId,
-        phoneNumber: job.data.phoneNumber,
-        amount: job.data.amount,
+        phoneNumber: data.phoneNumber,
+        amount: data.amount,
         status: 'ATTEMPTED',
       },
       update: {
@@ -72,8 +78,8 @@ export class MpesaStkPushProcessor extends WorkerHost {
 
     try {
       const response = await this.mpesaService.initiateSTKPush({
-        phoneNumber: job.data.phoneNumber,
-        amount: job.data.amount,
+        phoneNumber: data.phoneNumber,
+        amount: data.amount,
       });
       const checkoutRequestId = response.CheckoutRequestID;
 
@@ -123,13 +129,13 @@ export class MpesaStkPushProcessor extends WorkerHost {
         });
 
         this.logger.error(
-          `Job ${jobId} failed with a non-retryable error: ${
+          `[${correlationId}] Job ${jobId} failed with a non-retryable error: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
       } else {
         this.logger.warn(
-          `Job ${jobId} failed with a retryable error (attempt ${job.attemptsMade + 1}): ${
+          `[${correlationId}] Job ${jobId} failed with a retryable error (attempt ${job.attemptsMade + 1}): ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
@@ -140,19 +146,20 @@ export class MpesaStkPushProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('failed')
-  async onFailed(job: Job<StkPushJobData> | undefined, error: Error) {
+  async onFailed(job: Job<MpesaStkPushQueueJob> | undefined, error: Error) {
     if (!job) {
       this.logger.error('Received a failed event with no job attached');
       return;
     }
 
+    const { data, correlationId } = job.data;
     const jobId = job.id?.toString();
     const maxAttempts = job.opts.attempts ?? 1;
 
     // Execute final state updates when retries are completely exhausted
     if (job.attemptsMade >= maxAttempts) {
       this.logger.error(
-        `Job ${jobId} permanently failed after ${job.attemptsMade} attempts: ${error.message}`,
+        `[${correlationId}] Job ${jobId} permanently failed after ${job.attemptsMade} attempts: ${error.message}`,
       );
 
       if (jobId) {
@@ -172,8 +179,8 @@ export class MpesaStkPushProcessor extends WorkerHost {
         data: {
           operationType: 'mpesa-stk-push',
           data: {
-            phoneNumber: job.data.phoneNumber,
-            amount: job.data.amount,
+            phoneNumber: data.phoneNumber,
+            amount: data.amount,
             jobId: jobId,
           },
           reason: error.message,

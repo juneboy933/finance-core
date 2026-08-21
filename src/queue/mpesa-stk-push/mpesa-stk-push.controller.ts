@@ -18,6 +18,6 @@ export class MpesaStkPushController {
     @Req() req: AuthenticatedUser,
     @Body() dto: InitiateSTKDto,
   ) {
-    return this.mpesaQueue.enqueue(req.user.userId, dto);
+    return this.mpesaQueue.enqueue(dto, req.user.userId);
   }
 }
