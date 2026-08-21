@@ -3,10 +3,10 @@ import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { StkPushJobData } from './dto/mpesa-stk-push.dto';
 
-type MpesaStkPushQueueJob = {
+export interface MpesaStkPushQueueJob {
   data: StkPushJobData;
   correlationId: string;
-};
+}
 
 @Injectable()
 export class MpesaStkPushQueueService {
